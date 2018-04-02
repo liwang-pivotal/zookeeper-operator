@@ -9,11 +9,11 @@ import (
 	"k8s.io/client-go/rest"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/liwang-pivotal/zookeeper-operator/pkg/apis/zookeeperoperator"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/errors"
+
+	"github.com/liwang-pivotal/zookeeper-operator/pkg/apis/zookeeperoperator"
 )
 
 var (
