@@ -74,7 +74,7 @@ func Main() int {
 	}
 
 
-	cdrClient, err := controller.New(kubeConfigFile, masterHost, namespace)
+	controller, err := controller.New(kubeConfigFile, masterHost, namespace)
 	if err != nil {
 		logger.WithFields(log.Fields{
 			"error":      err,
@@ -84,8 +84,8 @@ func Main() int {
 		return 1
 	}
 
-	// Kick it off
-	controller.Run()
+	controller.CreateCustomResourceDefinition()
+
 
 	return 0
 }
