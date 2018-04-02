@@ -20,6 +20,7 @@ var (
 	baseImage    string
 	kubeConfigFile  string
 	masterHost   string
+	namespace string
 
 	logger = log.WithFields(log.Fields{
 		"package": "main",
@@ -29,7 +30,7 @@ var (
 func init() {
 	flag.BoolVar(&printVersion, "version", false, "Show version and quit")
 	flag.StringVar(&baseImage, "baseImage", "liwang0513/docker-zookeeper-kubernetes:1.0.0_0", "Base image to use when spinning up the zookeeper components.")
-	flag.StringVar(&kubeCfgFile, "kubecfg-file", "", "Location of kubecfg file for access to kubernetes master service; --kube_master_url overrides the URL part of this; if neither this nor --kube_master_url are provided, defaults to service account tokens")
+	flag.StringVar(&kubeConfigFile, "kubecfg-file", "", "Location of kubecfg file for access to kubernetes master service; --kube_master_url overrides the URL part of this; if neither this nor --kube_master_url are provided, defaults to service account tokens")
 	flag.StringVar(&masterHost, "masterhost", "http://127.0.0.1:8001", "Full url to k8s api server")
 	flag.Parse()
 }
@@ -63,10 +64,23 @@ func Main() int {
 
 	// Init
 	kube, err := kube.New(kubeConfigFile, masterHost)
-
-	controller, err := controller.New("zookeeper-cluster", k8sclient)
 	if err != nil {
-		log.Error("Could not init Controller! ", err)
+		logger.WithFields(log.Fields{
+			"error":      err,
+			"configFile": kubeConfigFile,
+			"masterHost": masterHost,
+		}).Fatal("Error initilizing kubernetes client ")
+		return 1
+	}
+
+
+	cdrClient, err := controller.New(kubeConfigFile, masterHost, namespace)
+	if err != nil {
+		logger.WithFields(log.Fields{
+			"error":      err,
+			"configFile": kubeConfigFile,
+			"masterHost": masterHost,
+		}).Fatal("Error initilizing ThirdPartyRessource (ZookeeperClusters) client ")
 		return 1
 	}
 
