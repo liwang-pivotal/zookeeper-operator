@@ -5,9 +5,12 @@ import (
 	"flag"
 	"os"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
-	"github.com/liwang-pivotal/zookeeper-operator/pkg/k8sutil"
+	"github.com/liwang-pivotal/zookeeper-operator/pkg/kube"
+	"github.com/liwang-pivotal/zookeeper-operator/pkg/controller"
+	"os/signal"
+	"syscall"
 )
 
 var (
@@ -15,8 +18,12 @@ var (
 
 	printVersion bool
 	baseImage    string
-	kubeCfgFile  string
+	kubeConfigFile  string
 	masterHost   string
+
+	logger = log.WithFields(log.Fields{
+		"package": "main",
+	})
 )
 
 func init() {
@@ -34,24 +41,39 @@ func Main() int {
 		os.Exit(0)
 	}
 
-	logrus.Info("zookeeper operator starting up!")
+	log.Info("zookeeper operator starting up!")
 
 	// Print params configured
-	logrus.Info("Using Variables:")
-	logrus.Infof("   baseImage: %s", baseImage)
+	log.Info("Using Variables:")
+	log.Infof("   baseImage: %s", baseImage)
+
+	//Creating osSignals first so we can exit at any time.
+	osSignals := make(chan os.Signal, 2)
+	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGKILL, os.Interrupt)
+
+	go func() {
+		for {
+			select {
+			case sig := <-osSignals:
+				logger.WithFields(log.Fields{"signal": sig}).Info("Got Signal from OS shutting Down: ")
+				os.Exit(1)
+			}
+		}
+	}()
 
 	// Init
-	k8sclient, err := k8sutil.New(kubeCfgFile, masterHost)
-	if err != nil {
-		logrus.Error("Could not init k8sclient! ", err)
-		return 1
-	}
+	kube, err := kube.New(kubeConfigFile, masterHost)
 
 	controller, err := controller.New("zookeeper-cluster", k8sclient)
 	if err != nil {
-		logrus.Error("Could not init Controller! ", err)
+		log.Error("Could not init Controller! ", err)
 		return 1
 	}
+
+	// Kick it off
+	controller.Run()
+
+	return 0
 }
 
 func main() {
