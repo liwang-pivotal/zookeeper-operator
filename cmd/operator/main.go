@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"flag"
 	"os"
+
 	"github.com/sirupsen/logrus"
+
+	"github.com/liwang-pivotal/zookeeper-operator/pkg/k8sutil"
 )
 
 var (
@@ -25,7 +28,7 @@ func init() {
 }
 
 
-func main() {
+func Main() int {
 	if printVersion {
 		fmt.Println("zookeeper-operator", appVersion)
 		os.Exit(0)
@@ -44,9 +47,13 @@ func main() {
 		return 1
 	}
 
-	controller, err := controller.New("elasticcluster", k8sclient)
+	controller, err := controller.New("zookeeper-cluster", k8sclient)
 	if err != nil {
 		logrus.Error("Could not init Controller! ", err)
 		return 1
 	}
+}
+
+func main() {
+	os.Exit(Main())
 }
