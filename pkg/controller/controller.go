@@ -13,6 +13,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/liwang-pivotal/zookeeper-operator/spec"
@@ -56,7 +59,7 @@ func New(kubeConfigFile, masterHost string, namespace string) (*CustomResourceCo
 		return nil, err
 	}
 
-	crdClient, err := rest.RESTClientFor(config)
+	crdClient, err := newCRDClient(config)
 	if err != nil {
 		methodLogger.WithFields(log.Fields{
 			"Error":  err,
@@ -139,6 +142,36 @@ func (c *CustomResourceController) CreateCustomResourceDefinition() (*apiextensi
 	}
 	return crd, nil
 }
+
+func newCRDClient(config *rest.Config) (*rest.RESTClient, error) {
+
+	var cdrconfig *rest.Config
+	cdrconfig = config
+	configureConfig(cdrconfig)
+
+	crdClient, err := rest.RESTClientFor(cdrconfig)
+	if err != nil {
+		panic(err)
+	}
+
+	return crdClient, nil
+}
+
+func configureConfig(cfg *rest.Config) error {
+	scheme := runtime.NewScheme()
+
+	if err := spec.AddToScheme(scheme); err != nil {
+		return err
+	}
+
+	cfg.GroupVersion = &spec.SchemeGroupVersion
+	cfg.APIPath = "/apis"
+	cfg.ContentType = runtime.ContentTypeJSON
+	cfg.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: serializer.NewCodecFactory(scheme)}
+
+	return nil
+}
+
 
 func (c *CustomResourceController) MonitorZookeeperEvents(eventsChannel chan spec.ZookeeperClusterWatchEvent, signalChannel chan int) {
 	methodLogger := logger.WithFields(log.Fields{"method": "MonitorZookeeperEvents"})
