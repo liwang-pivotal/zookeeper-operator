@@ -33,14 +33,14 @@ func New(image string,
 
 func (p *Processor) Run() error {
 	log.Info("Running Processor")
-	//p.watchEvents()
+	p.watchEvents()
 	return nil
 }
 
 func (p *Processor) watchEvents() {
 
 	p.crdController.MonitorZookeeperEvents(p.watchEventsChannel, p.control)
-	log.Debug("Watching Events")
+	log.Info("Watching Events")
 	go func() {
 		for {
 			select {
