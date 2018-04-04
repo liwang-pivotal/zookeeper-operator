@@ -199,7 +199,6 @@ func (c *CustomResourceController) MonitorZookeeperEvents(eventsChannel chan spe
 				cluster := obj.(*spec.ZookeeperCluster)
 				methodLogger.WithFields(log.Fields{"watchFunction": "ADDED",}).Info(spec.PrintCluster(cluster))
 				var event spec.ZookeeperClusterWatchEvent
-				//TODO
 				event.Type = "ADDED"
 				event.Object = *cluster
 				eventsChannel <- event
@@ -212,7 +211,7 @@ func (c *CustomResourceController) MonitorZookeeperEvents(eventsChannel chan spe
 					"eventType": "UPDATED",
 					"old":       spec.PrintCluster(oldCluster),
 					"new":       spec.PrintCluster(newCluster),
-				}).Debug("Recieved Update Event")
+				}).Info("Recieved Update Event")
 				var event spec.ZookeeperClusterWatchEvent
 				//TODO refactor this. use old/new in EventChannel
 				event.Type = "UPDATED"
@@ -223,6 +222,7 @@ func (c *CustomResourceController) MonitorZookeeperEvents(eventsChannel chan spe
 
 			DeleteFunc: func(obj interface{}) {
 				cluster := obj.(*spec.ZookeeperCluster)
+				methodLogger.WithFields(log.Fields{"watchFunction": "DELETED",}).Info(spec.PrintCluster(cluster))
 				var event spec.ZookeeperClusterWatchEvent
 				event.Type = "DELETED"
 				event.Object = *cluster

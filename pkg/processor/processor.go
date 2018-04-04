@@ -22,6 +22,7 @@ func New(image string,
 	kube kube.Kubernetes) (*Processor, error){
 	p := &Processor{
 		baseBrokerImage:    image,
+		watchEventsChannel: make(chan spec.ZookeeperClusterWatchEvent, 100),
 		crdController:      crdClient,
 		control:            control,
 		errors:             make(chan error),
