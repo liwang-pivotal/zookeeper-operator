@@ -12,7 +12,7 @@ var (
 )
 
 const (
-	CRDGroupName       = "liwang-pivotal.github.com"
+	CRDGroupName       = "pivotal.io"
 	CRDRessourcePlural = "zookeeperclusters"
 	CRDName            = "zookeepercluster"
 	CRDVersion         = "v1"
