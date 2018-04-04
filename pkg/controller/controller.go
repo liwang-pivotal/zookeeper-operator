@@ -3,17 +3,20 @@ package controller
 import (
 	"time"
 	"fmt"
-	log "github.com/sirupsen/logrus"
+	"reflect"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
-	"k8s.io/client-go/tools/clientcmd"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/rest"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/fields"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/liwang-pivotal/zookeeper-operator/pkg/apis/zookeeperoperator"
+	"github.com/liwang-pivotal/zookeeper-operator/spec"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -79,15 +82,15 @@ func (c *CustomResourceController) CreateCustomResourceDefinition() (*apiextensi
 
 	crd := &apiextensionsv1beta1.CustomResourceDefinition{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: zookeeperoperator.Name,
+			Name: spec.CRDFullName,
 		},
 		Spec: apiextensionsv1beta1.CustomResourceDefinitionSpec{
-			Group:   zookeeperoperator.GroupName,
-			Version: zookeeperoperator.Version,
+			Group:   spec.CRDGroupName,
+			Version: spec.CRDVersion,
 			Scope:   apiextensionsv1beta1.NamespaceScoped,
 			Names: apiextensionsv1beta1.CustomResourceDefinitionNames{
-				Plural: zookeeperoperator.ResourcePlural,
-				Kind:   zookeeperoperator.ResourceKind,
+				Plural: spec.CRDRessourcePlural,
+				Kind:   reflect.TypeOf(spec.ZookeeperCluster{}).Name(),
 			},
 		},
 	}
@@ -104,7 +107,7 @@ func (c *CustomResourceController) CreateCustomResourceDefinition() (*apiextensi
 	// wait for CRD being established
 	methodLogger.Debug("Created CRD, wating till its established")
 	err = wait.Poll(500*time.Millisecond, 60*time.Second, func() (bool, error) {
-		crd, err = c.ApiExtensionsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(zookeeperoperator.Name, metav1.GetOptions{})
+		crd, err = c.ApiExtensionsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Get(spec.CRDFullName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -128,7 +131,7 @@ func (c *CustomResourceController) CreateCustomResourceDefinition() (*apiextensi
 		return false, err
 	})
 	if err != nil {
-		deleteErr := c.ApiExtensionsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(zookeeperoperator.Name, nil)
+		deleteErr := c.ApiExtensionsClient.ApiextensionsV1beta1().CustomResourceDefinitions().Delete(spec.CRDFullName, nil)
 		if deleteErr != nil {
 			return nil, errors.NewAggregate([]error{err, deleteErr})
 		}
@@ -136,3 +139,74 @@ func (c *CustomResourceController) CreateCustomResourceDefinition() (*apiextensi
 	}
 	return crd, nil
 }
+
+func (c *CustomResourceController) MonitorZookeeperEvents(eventsChannel chan spec.ZookeeperClusterWatchEvent, signalChannel chan int) {
+	methodLogger := logger.WithFields(log.Fields{"method": "MonitorZookeeperEvents"})
+	methodLogger.Info("Starting Monitoring")
+
+	stop := make(chan struct{}, 1)
+	source := cache.NewListWatchFromClient(
+		c.crdClient,
+		spec.CRDRessourcePlural,
+		c.namespace,
+		fields.Everything())
+
+	store, controller := cache.NewInformer(
+		source,
+
+		&spec.ZookeeperCluster{},
+
+		// resyncPeriod
+		// Every resyncPeriod, all resources in the cache will retrigger events.
+		// Set to 0 to disable the resync.
+		0,
+
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				cluster := obj.(*spec.ZookeeperCluster)
+				methodLogger.WithFields(log.Fields{"watchFunction": "ADDED"}).Info(spec.PrintCluster(cluster))
+				var event spec.ZookeeperClusterWatchEvent
+				//TODO
+				event.Type = "ADDED"
+				event.Object = *cluster
+				eventsChannel <- event
+			},
+
+			UpdateFunc: func(old, new interface{}) {
+				oldCluster := old.(*spec.ZookeeperCluster)
+				newCluster := new.(*spec.ZookeeperCluster)
+				methodLogger.WithFields(log.Fields{
+					"eventType": "UPDATED",
+					"old":       spec.PrintCluster(oldCluster),
+					"new":       spec.PrintCluster(newCluster),
+				}).Debug("Recieved Update Event")
+				var event spec.ZookeeperClusterWatchEvent
+				//TODO refactor this. use old/new in EventChannel
+				event.Type = "UPDATED"
+				event.Object = *newCluster
+				event.OldObject = *oldCluster
+				eventsChannel <- event
+			},
+
+			DeleteFunc: func(obj interface{}) {
+				cluster := obj.(*spec.ZookeeperCluster)
+				var event spec.ZookeeperClusterWatchEvent
+				event.Type = "DELETED"
+				event.Object = *cluster
+				eventsChannel <- event
+			},
+		})
+
+	// the controller run starts the event processing loop
+	go controller.Run(stop)
+	methodLogger.Info(store)
+
+	go func() {
+		select {
+		case <-signalChannel:
+			methodLogger.Warn("recieved shutdown signal, stopping informer")
+			close(stop)
+		}
+	}()
+}
+

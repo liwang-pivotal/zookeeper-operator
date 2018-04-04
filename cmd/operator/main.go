@@ -11,6 +11,7 @@ import (
 	"github.com/liwang-pivotal/zookeeper-operator/pkg/controller"
 	"os/signal"
 	"syscall"
+	"github.com/elasticsearch-operator/pkg/processor"
 )
 
 var (
@@ -86,6 +87,8 @@ func Main() int {
 
 	controller.CreateCustomResourceDefinition()
 
+	processor, err := processor.New(image, *cdrClient, controlChannel, *kube)
+	processor.Run()
 
 	return 0
 }
