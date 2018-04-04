@@ -164,7 +164,7 @@ func (c *CustomResourceController) MonitorZookeeperEvents(eventsChannel chan spe
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				cluster := obj.(*spec.ZookeeperCluster)
-				methodLogger.WithFields(log.Fields{"watchFunction": "ADDED"}).Info(spec.PrintCluster(cluster))
+				methodLogger.WithFields(log.Fields{"watchFunction": "ADDED",}).Info(spec.PrintCluster(cluster))
 				var event spec.ZookeeperClusterWatchEvent
 				//TODO
 				event.Type = "ADDED"

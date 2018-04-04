@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"flag"
 	"os"
+	"os/signal"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/liwang-pivotal/zookeeper-operator/pkg/kube"
 	"github.com/liwang-pivotal/zookeeper-operator/pkg/controller"
-	"os/signal"
-	"syscall"
-	"github.com/elasticsearch-operator/pkg/processor"
+	"github.com/liwang-pivotal/zookeeper-operator/pkg/processor"
 )
 
 var (
@@ -53,11 +53,14 @@ func Main() int {
 	osSignals := make(chan os.Signal, 2)
 	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGKILL, os.Interrupt)
 
+	controlChannel := make(chan int, 2)
+
 	go func() {
 		for {
 			select {
 			case sig := <-osSignals:
 				logger.WithFields(log.Fields{"signal": sig}).Info("Got Signal from OS shutting Down: ")
+				controlChannel <- 1
 				os.Exit(1)
 			}
 		}
@@ -87,9 +90,10 @@ func Main() int {
 
 	controller.CreateCustomResourceDefinition()
 
-	processor, err := processor.New(image, *cdrClient, controlChannel, *kube)
+	processor, err := processor.New(baseImage, *controller, controlChannel, *kube)
 	processor.Run()
 
+	logger.Info("Exiting now")
 	return 0
 }
 
