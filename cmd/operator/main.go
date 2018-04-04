@@ -6,8 +6,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"net/http"
 
 	log "github.com/sirupsen/logrus"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/liwang-pivotal/zookeeper-operator/pkg/kube"
 	"github.com/liwang-pivotal/zookeeper-operator/pkg/controller"
@@ -21,6 +24,10 @@ var (
 	baseImage    string
 	kubeConfigFile  string
 	masterHost   string
+
+	metricListenAddress string
+	metricListenPath    string
+
 	namespace string
 
 	logger = log.WithFields(log.Fields{
@@ -33,6 +40,11 @@ func init() {
 	flag.StringVar(&baseImage, "baseImage", "liwang0513/docker-zookeeper-kubernetes:1.0.0_0", "Base image to use when spinning up the zookeeper components.")
 	flag.StringVar(&kubeConfigFile, "kubecfg-file", "", "Location of kubecfg file for access to kubernetes master service; --kube_master_url overrides the URL part of this; if neither this nor --kube_master_url are provided, defaults to service account tokens")
 	flag.StringVar(&masterHost, "masterhost", "http://127.0.0.1:8001", "Full url to k8s api server")
+
+	flag.StringVar(&metricListenAddress, "listen-address", ":9090", "The address to listen on for HTTP requests.")
+	flag.StringVar(&metricListenPath, "metric-path", "/metrics", "Path under which the the prometheus metrics can be found")
+	flag.StringVar(&namespace, "namespace", "", "Namespace on which the operator listens to CR, if not set then all Namespaces will be used")
+
 	flag.Parse()
 }
 
@@ -93,7 +105,11 @@ func Main() int {
 	processor, err := processor.New(baseImage, *controller, controlChannel, *kube)
 	processor.Run()
 
+	http.Handle(metricListenPath, promhttp.Handler())
+	//Blocking ListenAndServer, so we dont exit
+	logger.Fatal(http.ListenAndServe(metricListenAddress, nil))
 	logger.Info("Exiting now")
+
 	return 0
 }
 
