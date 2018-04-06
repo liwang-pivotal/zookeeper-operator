@@ -8,27 +8,27 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-//Main API Object
 type ZookeeperCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
-	//Metadata          metav1.ObjectMeta `json:"metadata"`
 
 	Spec  ZookeeperClusterSpec  `json:"spec"`
 	State ZookeeperClusterState `json:"state,omitempty"`
 	Scale ZookeeperClusterScale `json:"scale,omitempty"`
 }
 
-// k8s API List Type
 type ZookeeperClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
-	//Metadata        metav1.ListMeta `json:"metadata"`
 
 	Items []ZookeeperCluster `json:"items"`
 }
 
 type ZookeeperClusterSpec struct {
+	Image            string            `json:"image"`
+	BrokerCount      int32             `json:"brokerCount"`
+	Resources        ResourceSpec      `json:"resources"`
+	StorageClass     string            `json:"storageClass"`
 }
 
 type ZookeeperClusterState struct {
@@ -41,6 +41,12 @@ type ZookeeperClusterWatchEvent struct {
 	Type      string       `json:"type"`
 	Object    ZookeeperCluster `json:"object"`
 	OldObject ZookeeperCluster `json:"oldObject"`
+}
+
+type ResourceSpec struct {
+	Memory    string `json:"memory"`
+	DiskSpace string `json:"diskSpace"`
+	CPU       string `json:"cpu"`
 }
 
 //convenience functions
