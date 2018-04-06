@@ -62,23 +62,19 @@ func (p *Processor) processEvent(currentEvent spec.ZookeeperClusterWatchEvent) {
 	methodLogger := log.WithFields(log.Fields{
 		"method":                "processEvent",
 		"clusterName":           currentEvent.Object.Name,
-		"KafkaClusterEventType": currentEvent.Type,
+		"ZookeeperClusterEventType": currentEvent.Type,
 	})
-	methodLogger.Debug("Recieved Event, processing")
-	switch currentEvent.Type {
-	case "ADDED":
-		methodLogger.WithField("event-type", "ADDED").Info("New CRD added, creating cluster")
-		p.createZookeeperCluster(currentEvent.Object)
+	methodLogger.WithField("event-type", currentEvent.Type).Info("Caught new cluster event: ", currentEvent.Type)
+	switch {
+	case currentEvent.Type == "ADDED" || currentEvent.Type == "UPDATED":
+		p.processZookeeperCluster(currentEvent.Object)
 
-
-	case "DELETED":
-		methodLogger.WithField("event-type", "DELETED").Info("Delete Cluster, deleting all Objects ")
-
+	case currentEvent.Type == "DELETED":
 		p.deleteZookeeperCluster(currentEvent.Object)
 	}
 }
 
-func (p *Processor) createZookeeperCluster(clusterSpec spec.ZookeeperCluster) {
+func (p *Processor) processZookeeperCluster(clusterSpec spec.ZookeeperCluster) {
 	methodLogger := log.WithFields(log.Fields{
 		"method":      "CreateZookeeperCluster",
 		"clusterName": clusterSpec.ObjectMeta.Name,

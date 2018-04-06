@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 const (
@@ -21,7 +20,7 @@ const (
 
 func CreateCluster(cluster spec.ZookeeperCluster, client Kubernetes) error {
 	sts := generateZookeeperStatefulset(cluster)
-	//Create Broker Cluster
+
 	err := client.CreateOrUpdateStatefulSet(sts)
 	if err != nil {
 		return err
@@ -31,16 +30,9 @@ func CreateCluster(cluster spec.ZookeeperCluster, client Kubernetes) error {
 }
 
 func DeleteCluster(cluster spec.ZookeeperCluster, client Kubernetes) error {
-	cluster.Spec.BrokerCount = 0
 	sts := generateZookeeperStatefulset(cluster)
-	//Downsize Statefulset to 0
-	err := client.CreateOrUpdateStatefulSet(sts)
-	if err != nil {
-		return err
-	}
 
-	//Force Delete of Statefulset
-	err = client.DeleteStatefulset(sts)
+	err := client.deleteStatefulset(sts)
 	if err != nil {
 		return err
 	}
@@ -190,7 +182,7 @@ func (k *Kubernetes) updateStatefulSet(statefulset *appsv1Beta2.StatefulSet) err
 	return err
 }
 
-func (k *Kubernetes) DeleteStatefulset(statefulset *appsv1Beta2.StatefulSet) error {
+func (k *Kubernetes) deleteStatefulset(statefulset *appsv1Beta2.StatefulSet) error {
 	methodLogger := logger.WithFields(log.Fields{
 		"method":    "DeleteStatefulset",
 		"name":      statefulset.ObjectMeta.Name,
@@ -203,36 +195,31 @@ func (k *Kubernetes) DeleteStatefulset(statefulset *appsv1Beta2.StatefulSet) err
 	}
 	if exists {
 		//Scale the statefulset down to zero (https://github.com/kubernetes/client-go/issues/91)
-		replicas := int32(0)
-		statefulset.Spec.Replicas = &replicas
+		statefulset.Spec.Replicas = new(int32)
 		err = k.updateStatefulSet(statefulset)
 		if err != nil {
-			methodLogger.WithField("error", err).Warn("Error while scaling StatefulSet down to 0, ignoring since deleting afterwards")
+			methodLogger.WithField("error", err).Error("Could not scale statefulset: %s", statefulset.Name)
+		} else {
+			methodLogger.Info("Scaled statefulset %s to zero: ", statefulset.Name)
 		}
-		methodLogger.Info("Sleeping 15s per Broker to let StatefulSet scale down ")
-		time.Sleep(time.Duration(int(*statefulset.Spec.Replicas)) * time.Second * 15)
-		err = k.deleteStatefulSet(statefulset)
+
+		err := k.Client.AppsV1beta1().StatefulSets(statefulset.ObjectMeta.Namespace).Delete(statefulset.ObjectMeta.Name, &metav1.DeleteOptions{
+			PropagationPolicy: func() *metav1.DeletionPropagation {
+				foreground := metav1.DeletePropagationForeground
+				return &foreground
+			}(),
+		})
 		if err != nil {
-			methodLogger.WithField("error", err).Error("Can delete statefulset")
+			methodLogger.WithField("error", err).Error("Could not delete statefulset: %s", statefulset.Name)
 			return err
+		} else {
+			methodLogger.Info("Deleting statefulset: %s", statefulset.Name)
 		}
 	} else {
-		methodLogger.Debug("Trying to delete but Statefulset dosnt exist.")
+		methodLogger.Debug("Trying to delete but StatefulSet doesn't exist.")
 
 	}
 	return nil
-}
-
-func (k *Kubernetes) deleteStatefulSet(statefulset *appsv1Beta2.StatefulSet) error {
-	var gracePeriod int64
-	gracePeriod = 1
-
-	deleteOption := metav1.DeleteOptions{
-		GracePeriodSeconds: &gracePeriod,
-	}
-	err := k.Client.AppsV1beta1().StatefulSets(statefulset.ObjectMeta.Namespace).Delete(statefulset.ObjectMeta.Name, &deleteOption)
-
-	return err
 }
 
 func createLabels(cluster spec.ZookeeperCluster) map[string]string {
