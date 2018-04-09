@@ -82,7 +82,7 @@ func (p *Processor) processZookeeperCluster(clusterSpec spec.ZookeeperCluster) {
 
 	err := kube.CreateCluster(clusterSpec, p.kube)
 	if err != nil {
-		methodLogger.WithField("error", err).Fatal("Cant create statefulset")
+		methodLogger.WithField("error", err).Fatal("Cant create zookeeper cluster")
 	}
 }
 
