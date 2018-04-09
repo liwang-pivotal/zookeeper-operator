@@ -61,7 +61,8 @@ func (k *Kubernetes) CreateOrUpdateService(service *v1.Service) error {
 	if !exists {
 		err = k.createService(service)
 	} else {
-		err = k.updateService(service)
+		// Update will cause issue: https://www.timcosta.io/kubernetes-service-invalid-clusterip-or-resourceversion
+		//err = k.updateService(service)
 	}
 	if err != nil {
 		methodLogger.WithField("error", err).Error("Error while creating or updating service")

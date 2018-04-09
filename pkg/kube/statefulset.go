@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	defaultCPU    = "10m"
+	defaultCPU    = "500m"
 	defaultDisk   = "1Gi"
-	defaultMemory = "50Mi"
+	defaultMemory = "200Mi"
 )
 
 func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.StatefulSet {
@@ -40,13 +40,16 @@ func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.St
 		},
 		Spec: appsv1Beta2.StatefulSetSpec{
 			Replicas: &replicas,
-
+			ServiceName: "zk-headless",
 			Selector: &metav1.LabelSelector{
 				MatchLabels: createLabels(cluster),
 			},
 			Template: v1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: createLabels(cluster),
+					Annotations: map[string]string{
+						"pod.alpha.kubernetes.io/initialized": "true",
+					},
 				},
 				Spec: v1.PodSpec{
 					Affinity: &v1.Affinity{
@@ -67,12 +70,147 @@ func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.St
 					},
 					Containers: []v1.Container{
 						{
-							Name:  "sysctl-conf",
-							Image: "busybox:1.26.2",
+							Name:  "k8szk",
+							ImagePullPolicy: "Always",
+							Image: "gcr.io/google_samples/k8szk:v1",
+							Ports: []v1.ContainerPort{
+								{
+									Name:          "client",
+									ContainerPort: 2181,
+									Protocol:      v1.ProtocolTCP,
+								},
+								{
+									Name:          "server",
+									ContainerPort: 2888,
+									Protocol:      v1.ProtocolTCP,
+								},
+								{
+									Name:          "leader-election",
+									ContainerPort: 3888,
+									Protocol:      v1.ProtocolTCP,
+								},
+							},
+							Env: []v1.EnvVar{
+								{
+									Name: "ZK_ENSEMBLE",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "ensemble",
+										},
+									},
+								},
+								{
+									Name: "ZK_HEAP_SIZE",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "jvm.heap",
+										},
+									},
+								},
+								{
+									Name: "ZK_TICK_TIME",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "tick",
+										},
+									},
+								},
+								{
+									Name: "ZK_INIT_LIMIT",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "init",
+										},
+									},
+								},
+								{
+									Name: "ZK_SYNC_LIMIT",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "sync",
+										},
+									},
+								},
+								{
+									Name: "ZK_MAX_CLIENT_CNXNS",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "client.cnxns",
+										},
+									},
+								},
+								{
+									Name: "ZK_SNAP_RETAIN_COUNT",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "snap.retain",
+										},
+									},
+								},
+								{
+									Name: "ZK_PURGE_INTERVAL",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "purge.interval",
+										},
+									},
+								},
+								{
+									Name: "ZK_MAX_CLIENT_CNXNS",
+									ValueFrom: &v1.EnvVarSource{
+										ConfigMapKeyRef: &v1.ConfigMapKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{Name: "zk-config"},
+											Key:                  "client.cnxns",
+										},
+									},
+								},
+								{
+									Name:  "ZK_CLIENT_PORT",
+									Value: "2181",
+								},
+								{
+									Name:  "ZK_SERVER_PORT",
+									Value: "2888",
+								},
+								{
+									Name:  "ZK_ELECTION_PORT",
+									Value: "3888",
+								},
+							},
 							Command: []string{
 								"sh",
 								"-c",
-								"sysctl -w vm.max_map_count=262166 && while true; do sleep 86400; done",
+								"zkGenConfig.sh && zkServer.sh start-foreground",
+							},
+							ReadinessProbe: &v1.Probe{
+								Handler: v1.Handler{
+									Exec: &v1.ExecAction{
+										Command: []string{
+											"zkOk.sh",
+										},
+									},
+								},
+								InitialDelaySeconds: 10,
+								TimeoutSeconds:      5,
+							},
+							LivenessProbe: &v1.Probe{
+								Handler: v1.Handler{
+									Exec: &v1.ExecAction{
+										Command: []string{
+											"zkOk.sh",
+										},
+									},
+								},
+								InitialDelaySeconds: 10,
+								TimeoutSeconds:      5,
 							},
 							Resources: v1.ResourceRequirements{
 								Limits: v1.ResourceList{
@@ -84,8 +222,22 @@ func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.St
 									"memory": memory,
 								},
 							},
+							VolumeMounts: []v1.VolumeMount{
+								{
+									Name:      "datadir",
+									MountPath: "/var/lib/zookeeper",
+								},
+							},
 							SecurityContext: &v1.SecurityContext{
 								Privileged: &[]bool{true}[0],
+							},
+						},
+					},
+					Volumes: []v1.Volume{
+						{
+							Name: "datadir",
+							VolumeSource: v1.VolumeSource{
+								EmptyDir: &v1.EmptyDirVolumeSource{},
 							},
 						},
 					},

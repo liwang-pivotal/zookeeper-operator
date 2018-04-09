@@ -43,7 +43,7 @@ func New(kubeConfigFile, masterHost string) (*Kubernetes, error) {
 	methodLogger.WithFields(log.Fields{
 		"config": kubeConfigFile,
 		"client": client,
-	}).Debug("Initilized kubernetes cLient")
+	}).Debug("Init Kubernetes client")
 
 	return k, nil
 }

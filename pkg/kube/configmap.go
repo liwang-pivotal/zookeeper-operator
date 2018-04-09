@@ -16,8 +16,8 @@ func generateConfigMap(cluster spec.ZookeeperCluster) *v1.ConfigMap {
 			Namespace: cluster.ObjectMeta.Namespace,
 		},
 		Data: map[string]string{
-			"ensemble": "zk-0",
-			"jvm.heap": "2G",
+			"ensemble": "zk-0;zk-1;zk-2",
+			"jvm.heap": "512M",
 			"tick": "2000",
 			"init": "10",
 			"sync": "5",

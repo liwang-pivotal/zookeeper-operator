@@ -49,7 +49,6 @@ type ResourceSpec struct {
 	CPU       string `json:"cpu"`
 }
 
-//convenience functions
 func PrintCluster(cluster *ZookeeperCluster) string {
 	return fmt.Sprintf("%s/%s, APIVersion: %s, Kind: %s, Value: %#v", cluster.ObjectMeta.Namespace, cluster.ObjectMeta.Name, cluster.APIVersion, cluster.Kind, cluster)
 }
