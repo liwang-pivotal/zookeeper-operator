@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultCPU    = "500m"
-	defaultDisk   = "1Gi"
+	defaultDiskSpace   = "100Mi"
 	defaultMemory = "200Mi"
 )
 
@@ -30,6 +30,11 @@ func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.St
 	memory, err := resource.ParseQuantity(cluster.Spec.Resources.Memory)
 	if err != nil {
 		memory, _ = resource.ParseQuantity(defaultMemory)
+	}
+
+	diskSpace, err := resource.ParseQuantity(cluster.Spec.Resources.DiskSpace)
+	if err != nil {
+		diskSpace, _ = resource.ParseQuantity(defaultDiskSpace)
 	}
 
 	statefulSet := &appsv1Beta2.StatefulSet{
@@ -224,7 +229,7 @@ func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.St
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
-									Name:      "datadir",
+									Name:      "zk-data",
 									MountPath: "/var/lib/zookeeper",
 								},
 							},
@@ -233,13 +238,27 @@ func generateZookeeperStatefulset(cluster spec.ZookeeperCluster) *appsv1Beta2.St
 							},
 						},
 					},
-					Volumes: []v1.Volume{
-						{
-							Name: "datadir",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{},
+				},
+			},
+			VolumeClaimTemplates: []v1.PersistentVolumeClaim{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "zk-data",
+						Labels: createLabels(cluster),
+						Annotations: map[string]string{
+							"volume.beta.kubernetes.io/storage-class": "standard",
+						},
+					},
+					Spec: v1.PersistentVolumeClaimSpec{
+						AccessModes: []v1.PersistentVolumeAccessMode{
+							v1.ReadWriteOnce,
+						},
+						Resources: v1.ResourceRequirements{
+							Requests: v1.ResourceList{
+								v1.ResourceStorage: diskSpace,
 							},
 						},
+
 					},
 				},
 			},
@@ -342,7 +361,7 @@ func (k *Kubernetes) deleteStatefulset(statefulset *appsv1Beta2.StatefulSet) err
 			methodLogger.WithField("error", err).Error("Could not delete statefulset: %s", statefulset.Name)
 			return err
 		} else {
-			methodLogger.Info("Deleting statefulset: %s", statefulset.Name)
+			methodLogger.Info("Deleting statefulset: ", statefulset.Name)
 		}
 	} else {
 		methodLogger.Debug("Trying to delete but StatefulSet doesn't exist.")

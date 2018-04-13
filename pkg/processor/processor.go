@@ -46,7 +46,7 @@ func (p *Processor) watchEvents() {
 		for {
 			select {
 			case event := <-p.watchEventsChannel:
-				log.Info("recieved event through event channel", event.Type)
+				log.Info("recieved event through event channel: ", event.Type)
 				p.processEvent(event)
 			case err := <-p.errors:
 				log.WithField("error", err).Error("Recieved Error through error channel")
